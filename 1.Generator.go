@@ -11,7 +11,6 @@ import (
 
 // signalHandler слушает сигналы отмены
 func signalHandler(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) {
-
 	defer wg.Done()
 
 	sig := make(chan os.Signal, 1)
@@ -31,7 +30,6 @@ func signalHandler(ctx context.Context, cancel context.CancelFunc, wg *sync.Wait
 
 // generator отправляет числа от 0 до n в канал
 func generator(ctx context.Context, n int) chan int {
-
 	out := make(chan int)
 
 	go func() {
@@ -51,7 +49,8 @@ func generator(ctx context.Context, n int) chan int {
 }
 
 func main() {
-
+	// создаём контекст для того, чтобы через cancel
+	// иметь возможность остановить какие бы то ни было горутины
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
