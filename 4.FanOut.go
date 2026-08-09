@@ -11,13 +11,12 @@ import (
 )
 
 const (
-	countOutChans = 5
-	numCount      = 100
+	countOutChans = 5   // на сколько каналов будем делить канал
+	numCount      = 100 // сколько чисел будем отправлять в исходный канал
 )
 
-// generator отправляет числа 0 до countOutChans в канал numCount раз
+// generator отправляет числа от 0 до n в канал
 func generator(ctx context.Context, n int) chan int {
-
 	out := make(chan int)
 
 	go func() {
@@ -31,18 +30,24 @@ func generator(ctx context.Context, n int) chan int {
 			case out <- num:
 			}
 		}
+		fmt.Println("\ngenerator завершил отправку.")
 	}()
 
 	return out
 }
 
+// fanOut делит входящий канал на countOutChans каналов
 func fanOut(ctx context.Context, in chan int) []chan int {
-
+	// сначала создадим то, что хотим возвращать из функции - слайс каналов ёмкостью countOutChans,
+	// а в цикле - инициализируем каждый канал слайса
 	chs := make([]chan int, countOutChans)
 	for i := range chs {
 		chs[i] = make(chan int)
 	}
 
+	// в самом *фоновом* воркере мы лишь в бесконечном цикле мы
+	// либо получаем сигнал отмены,
+	// либо получаем данные для обработки
 	go func() {
 		defer func() {
 			for i := range chs {
@@ -72,11 +77,10 @@ func fanOut(ctx context.Context, in chan int) []chan int {
 		}
 	}()
 
-	return chs
+	return chs // отдаём созданный в начале функции слайс каналов
 }
 
 func main() {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -118,7 +122,6 @@ func main() {
 
 // signalHandler слушает сигналы отмены
 func signalHandler(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) {
-
 	defer wg.Done()
 
 	sig := make(chan os.Signal, 1)

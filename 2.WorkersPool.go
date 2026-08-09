@@ -49,7 +49,7 @@ func workersPool(ctx context.Context, countWorkers int, in chan int) chan int {
 	for i := 0; i < countWorkers; i++ {
 		workersWg.Add(1) // до цикла можно было бы сделать и так workersWg.Add(countWorkers)
 
-		// в самом *фоновом* воркере мы лишь в бесконечном цикле мы
+		// в самом *фоновом* воркере мы лишь в бесконечном цикле
 		// либо получаем сигнал отмены,
 		// либо получаем данные для обработки
 		go func() {
