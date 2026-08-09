@@ -22,6 +22,8 @@ func generator(ctx context.Context, n int) chan int {
 	go func() {
 		defer close(out)
 		for i := 0; i < n; i++ {
+			// для наглядности результата число для отправки выбираем
+			// псевдослучайным образом из диапазона от 0 до countOutChans
 			num := rand.IntN(countOutChans)
 			select {
 			case <-ctx.Done():
@@ -45,10 +47,11 @@ func fanOut(ctx context.Context, in chan int) []chan int {
 		chs[i] = make(chan int)
 	}
 
-	// в самом *фоновом* воркере мы лишь в бесконечном цикле мы
+	// в *фоновой* горутине-воркере мы лишь в бесконечном цикле
 	// либо получаем сигнал отмены,
 	// либо получаем данные для обработки
 	go func() {
+		// при выходе из горутины надо пройти по слайсу и закрыть каждый из каналов
 		defer func() {
 			for i := range chs {
 				close(chs[i])
@@ -58,19 +61,25 @@ func fanOut(ctx context.Context, in chan int) []chan int {
 
 		for {
 			select {
+			// либо получаем сигнал отмены
 			case <-ctx.Done():
 				fmt.Printf("fanOut завершается по отмене контекста.\n")
 				return
+			// либо получаем данные для обработки - используем синтаксис v, ok := <-in,
+			// чтобы не ловить zero value из закрытого канала
 			case v, ok := <-in:
 				if !ok {
 					fmt.Printf("входящий канал закрыт, перестаём его слушать. fanOut завершается.\n")
 					return
 				}
 
+				// здесь проверяем не случилось ли отмены и действуем аналогичным образом
 				select {
+				// либо получаем сигнал отмены
 				case <-ctx.Done():
 					fmt.Printf("fanOut завершается по отмене контекста до отправки в канал №%d.\n", v)
 					return
+				// либо пытаемся отправить результат
 				case chs[v] <- v:
 				}
 			}
@@ -84,26 +93,34 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var wg sync.WaitGroup
-	var mu sync.Mutex
+	var wg sync.WaitGroup // будет ждать signalHandler
+	var mu sync.Mutex     // будем использовать при записи результатов для наглядности
 
 	wg.Add(1)
 	go signalHandler(ctx, cancel, &wg)
 
+	// в res будут храниться слайсы с числами по значениям:
+	// - res[0] хранит все отправленные нули
+	// - res[1] хранит все отправленные единицы
+	// и т.д.
 	res := make([][]int, countOutChans)
 	for i := range res {
 		res[i] = make([]int, 0)
 	}
 
-	in := generator(ctx, numCount)
-	chs := fanOut(ctx, in)
+	in := generator(ctx, numCount) // получаем канал для разделения
+	chs := fanOut(ctx, in)         // получаем каналы после разделения
 
-	var readersWg sync.WaitGroup
+	// результаты будем собирать отдав каждый из результирующих каналов отдельной горутине,
+	// слайсы для сбора чисел при этом не привязаны к конкретной горутине
+	var readersWg sync.WaitGroup // используем для ожидания горутин сбора результатов
 	for i := 0; i < countOutChans; i++ {
 		readersWg.Add(1)
 		go func() {
 			defer readersWg.Done()
 			for v := range chs[i] {
+				// так как несколько горутин могут получить одно и то же v,
+				// то записываем под мьютексом
 				mu.Lock()
 				res[v] = append(res[v], v)
 				mu.Unlock()
@@ -111,10 +128,11 @@ func main() {
 		}()
 	}
 
-	readersWg.Wait()
-	cancel()
-	wg.Wait()
+	readersWg.Wait() // дожидаемся читателей
+	cancel()         // сигнализируем каким бы то ни было горутинам закругляться
+	wg.Wait()        // дожидаемся (в данном случае только signalHandler)
 
+	// выводим результат
 	for i := range res {
 		fmt.Println(res[i])
 	}
