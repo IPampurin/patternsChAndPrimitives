@@ -15,11 +15,9 @@ const (
 
 // generator отправляет числа от 0 до countNums в канал
 func generator(ctx context.Context) chan int {
-
 	out := make(chan int)
 
 	go func() {
-
 		defer close(out)
 
 		for i := 0; i < countNums; i++ {
@@ -30,7 +28,6 @@ func generator(ctx context.Context) chan int {
 			case out <- i:
 			}
 		}
-
 		fmt.Printf("\ngenerator завершил отправку.\n")
 	}()
 
@@ -39,11 +36,12 @@ func generator(ctx context.Context) chan int {
 
 // transformer изменяет число из входящего канала по оправилу action и отправляет результат в исходящий канал
 func transformer(ctx context.Context, in chan int, action func(int) int) chan int {
-
+	// создаём то, что будем возвращать
 	res := make(chan int)
 
+	// в фоновой горутине просто слушаем входящий канал
+	// и пытаемся отправить результат преобразования с учётом контекста
 	go func() {
-
 		defer func() {
 			close(res)
 			fmt.Println("transformer завершён.")
@@ -70,11 +68,10 @@ func transformer(ctx context.Context, in chan int, action func(int) int) chan in
 		}
 	}()
 
-	return res
+	return res // отдаём созданный в начале функции канал
 }
 
 func main() {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -83,16 +80,20 @@ func main() {
 	wg.Add(1)
 	go signalHandler(ctx, cancel, &wg)
 
+	// запускаем генератор чисел
 	numsCh := generator(ctx)
+	// задаём правило трансформации данных
 	action := func(num int) int {
-		return num * 2
+		return num * 2 //
 	}
 
+	// слушем канал с результатами и записываем результат
 	nums := make([]int, 0)
 	for v := range transformer(ctx, numsCh, action) {
 		nums = append(nums, v)
 	}
 
+	// выводим результат
 	fmt.Println(nums)
 
 	cancel()
@@ -103,7 +104,6 @@ func main() {
 
 // signalHandler слушает сигналы отмены
 func signalHandler(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) {
-
 	defer wg.Done()
 
 	sig := make(chan os.Signal, 1)
