@@ -77,6 +77,7 @@ func tee(ctx context.Context, in chan int) (chan int, chan int) {
 					case <-ctx.Done():
 						fmt.Printf("tee завершается по отмене контекста.\n")
 						return
+					// либо отправляем
 					case out1 <- v:
 					}
 					select {
@@ -84,6 +85,7 @@ func tee(ctx context.Context, in chan int) (chan int, chan int) {
 					case <-ctx.Done():
 						fmt.Printf("tee завершается по отмене контекста.\n")
 						return
+					// либо отправляем
 					case out2 <- v:
 					}
 				}
