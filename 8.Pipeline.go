@@ -10,16 +10,14 @@ import (
 )
 
 const (
-	countNums = 100
+	countNums = 10
 )
 
 // generator отправляет числа от 0 до countNums в канал
 func generator(ctx context.Context) chan int {
-
 	out := make(chan int)
 
 	go func() {
-
 		defer close(out)
 
 		for i := 0; i < countNums; i++ {
@@ -37,36 +35,59 @@ func generator(ctx context.Context) chan int {
 	return out
 }
 
-// process применяет к числам из входящего канала правило action и отправляет результат в исходящий канал
-func process(ctx context.Context, in chan int, action func(int) int) chan int {
-
+// processOne применяет к числам из входящего канала правило actionOne
+// и отправляет результат в исходящий канал
+func processOne(in chan int, actionOne func(int) int) chan int {
 	res := make(chan int)
 
 	go func() {
-
 		defer func() {
 			close(res)
-			fmt.Println("process завершён.")
+			fmt.Println("processOne завершён.")
 		}()
 
-		for {
-			select {
-			case <-ctx.Done():
-				fmt.Printf("process завершается по отмене контекста.\n")
-				return
-			case v, ok := <-in:
-				if !ok {
-					fmt.Printf("входящий канал закрыт, перестаём его слушать. process завершается.\n")
-					return
-				}
+		// просто слушаем и отправляем дальше в надежде, что
+		// у нашего небуферизированного канала есть читатель
+		for v := range in {
+			res <- actionOne(v)
+		}
+	}()
 
-				select {
-				case <-ctx.Done():
-					fmt.Printf("process завершается по отмене контекста.\n")
-					return
-				case res <- action(v):
-				}
-			}
+	return res
+}
+
+// processTwo применяет к числам из входящего канала правило actionTwo
+// и отправляет результат в исходящий канал
+func processTwo(in chan int, actionTwo func(int) int) chan int {
+	res := make(chan int)
+
+	go func() {
+		defer func() {
+			close(res)
+			fmt.Println("processTwo завершён.")
+		}()
+
+		for v := range in {
+			res <- actionTwo(v)
+		}
+	}()
+
+	return res
+}
+
+// processThree применяет к числам из входящего канала правило actionThree
+// и отправляет результат в исходящий канал
+func processThree(in chan int, actionThree func(int) int) chan int {
+	res := make(chan int)
+
+	go func() {
+		defer func() {
+			close(res)
+			fmt.Println("processThree завершён.")
+		}()
+
+		for v := range in {
+			res <- actionThree(v)
 		}
 	}()
 
@@ -74,7 +95,6 @@ func process(ctx context.Context, in chan int, action func(int) int) chan int {
 }
 
 func main() {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -83,26 +103,42 @@ func main() {
 	wg.Add(1)
 	go signalHandler(ctx, cancel, &wg)
 
-	actoin := func(num int) int {
-		return num * num
+	// определяем действия для каждой ступени пайплайна
+	actoinOne := func(num int) int {
+		return num + 2
+	}
+	actoinTwo := func(num int) int {
+		return num - 2
+	}
+	actoinThree := func(num int) int {
+		return num + 1
 	}
 
+	// в nums будем складывать результат
 	nums := make([]int, 0)
-	for v := range process(ctx, generator(ctx), actoin) {
+
+	// получаем канал после первой ступени обработки исходных данных
+	levelOne := processOne(generator(ctx), actoinOne)
+
+	// получаем канал после второй ступени обработки
+	levelTwo := processTwo(levelOne, actoinTwo)
+
+	// получаем канал после третьей ступени обработки и записываем результат
+	levelTree := processThree(levelTwo, actoinThree)
+	for v := range levelTree {
 		nums = append(nums, v)
 	}
 
-	fmt.Println(nums)
-
 	cancel()
 	wg.Wait()
+
+	fmt.Println(nums)
 
 	fmt.Println("Программа завершена.")
 }
 
 // signalHandler слушает сигналы отмены
 func signalHandler(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) {
-
 	defer wg.Done()
 
 	sig := make(chan os.Signal, 1)
