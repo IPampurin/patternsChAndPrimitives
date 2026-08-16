@@ -15,11 +15,9 @@ const (
 
 // generator отправляет числа от 0 до countNums в канал
 func generator(ctx context.Context) chan int {
-
 	out := make(chan int)
 
 	go func() {
-
 		defer close(out)
 
 		for i := 0; i < countNums; i++ {
@@ -30,7 +28,6 @@ func generator(ctx context.Context) chan int {
 			case out <- i:
 			}
 		}
-
 		fmt.Printf("\ngenerator завершил отправку.\n")
 	}()
 
@@ -39,11 +36,11 @@ func generator(ctx context.Context) chan int {
 
 // filter фильтрует числа из входящего канала по правилу condition и отправляет результат в исходящий канал
 func filter(ctx context.Context, in chan int, condition func(int) bool) chan int {
-
 	res := make(chan int)
 
+	// фоновая горутина, как и в предыдущих паттернах, получает данные из канала
+	// и отправляет дальше просто после проверки "фильтрующего" условия
 	go func() {
-
 		defer func() {
 			close(res)
 			fmt.Println("filter завершён.")
@@ -76,7 +73,6 @@ func filter(ctx context.Context, in chan int, condition func(int) bool) chan int
 }
 
 func main() {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -86,8 +82,9 @@ func main() {
 	go signalHandler(ctx, cancel, &wg)
 
 	numsCh := generator(ctx)
-	condition := func(num int) bool {
 
+	// определяем условие, по которому будем производить фильтрацию
+	condition := func(num int) bool {
 		if num%2 == 0 {
 			return true
 		}
@@ -110,7 +107,6 @@ func main() {
 
 // signalHandler слушает сигналы отмены
 func signalHandler(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) {
-
 	defer wg.Done()
 
 	sig := make(chan os.Signal, 1)
